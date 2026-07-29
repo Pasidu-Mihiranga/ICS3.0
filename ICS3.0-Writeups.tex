@@ -76,7 +76,7 @@
 % category tag
 \newcommand{\cat}[1]{{\small\textcolor{accent}{\textbf{[#1]}}}}
 
-\newcommand{\repo}{https://github.com/Pasidu-Mihiranga/ICS3.0/blob/main/ALLWriteUps/scripts}
+\newcommand{\repo}{https://github.com/Pasidu-Mihiranga/ICS3.0/blob/main/scripts}
 
 % ===========================================================================
 \begin{document}
@@ -114,7 +114,7 @@ me all evening; a couple fell over in ten minutes once I saw the trick.
 Where a challenge needed a real script to finish, I haven't pasted the code into
 this document --- it clutters the read and you can't run a PDF anyway. Instead
 there's a small arrow line under the solution pointing at the exact file in the
-repo. The scripts live under \code{ALLWriteUps/scripts/} unless noted otherwise.
+repo. Every script lives in the \code{scripts/} folder at the repo root.
 
 The event used two flag prefixes, \code{ICS{}} and \code{iCS{}} (lowercase
 \emph{i}), and yes --- that difference is load-bearing on at least one
@@ -313,6 +313,7 @@ still accepts "selectors from the retired archive service". The search endpoint'
 \code{3.51.3}, confirming SQL selector injection. Query \code{sqlite_master},
 find a hidden \code{confidential_notes} table, read it, and the note is the flag.
 
+\solver{\repo/chameleo_great_power_solve.py}{chameleo_great_power_solve.py}
 \flag{iCS{s3l3c7_qu3r13s_n33d_b0und4r13s}}
 
 % ---------------------------------------------------------------------------
@@ -339,6 +340,7 @@ level-5, and since the signature is genuinely valid it carries out the elevated
 action and hands back a \code{decision_session} cookie. Use that cookie on
 \code{/api/archive} and the restricted archive opens up.
 
+\solver{\repo/kotoamatsukami_exploit.py}{kotoamatsukami_exploit.py}
 \flag{ICS{7h3_d3c1510n_w45_n3v3r_y0ur5}}
 
 % ---------------------------------------------------------------------------
@@ -369,6 +371,7 @@ smoking gun --- packets \emph{kept arriving} across orbits 2 and 3 after the
 publishing the failure story, the insurance claim needs it to look
 unrecoverable. \$47M of fraud, and the flag is in that memo.
 
+\solver{\repo/vanishing_stars_exploit.ps1}{vanishing_stars_exploit.ps1}
 \flag{ICS{7H3_5473LL173_N3V3R_F41L3D}}
 
 % ===========================================================================
@@ -403,7 +406,7 @@ onward I ROP: \code{open("lord_ruin_script.txt")} $\rightarrow$
 \code{read(3, bss, 0x100)} $\rightarrow$ \code{write(1, bss, 0x100)}. That dumps
 the script and the flag with it.
 
-\solver{https://github.com/Pasidu-Mihiranga/ICS3.0/blob/main/Man_Behind_the_Mask_exploit.py}{Man_Behind_the_Mask_exploit.py}
+\solver{\repo/man_behind_the_mask_exploit.py}{man_behind_the_mask_exploit.py}
 \flag{iCS{N3W_M45K_54M3_M3M0RY}}
 
 % ---------------------------------------------------------------------------
@@ -448,6 +451,7 @@ your face. The border actually weaves \emph{two} execution lanes together.
 Selecting the other lane (codel chooser to the right) and seeding the stack with
 ASCII \code{_a} (\code{95, 97}) runs the hidden lane and prints the real one.
 
+\solver{\repo/art_of_programming_solve.py}{art_of_programming_solve.py}
 \flag{ICS{This_is_Mondarian_art}}
 
 % ===========================================================================
@@ -504,7 +508,7 @@ CTR nonce, then AES-CTR ciphertext keyed by
 \code{sha256(fragmentA + fragmentB)} = \code{sha256("1m4g3_l4y3r5_r3m3mb3r")}.
 Replicate that and \code{license.dat} decrypts to a JSON blob with the flag.
 
-\solver{https://github.com/Pasidu-Mihiranga/ICS3.0/blob/main/The\%20Contaminated\%20Container/decrypt.py}{decrypt.py}
+\solver{\repo/contaminated_container_decrypt.py}{contaminated_container_decrypt.py}
 \flag{ICS{d3l3t3d_fr0m_v13w_n0t_fr0m_h15t0ry}}
 
 % ---------------------------------------------------------------------------
@@ -534,6 +538,7 @@ of the legitimate 4.2.2 release is sitting in the provenance attestation the
 whole time --- the artefact written to prove the malware wasn't there is the key
 that unlocks it. Decrypt with that and act seven's message is the flag.
 
+\solver{\repo/seventh_encore_decrypt.js}{seventh_encore_decrypt.js}
 \flag{ICS{th3_53v3nth_3nc0r3_w45_n3v3r_h3r5}}
 
 % ---------------------------------------------------------------------------
@@ -646,8 +651,10 @@ The Document That Remembers & forensics & \code{ICS{t0mb5t0n35_r3m3mb3r_42b7}} \
 \end{center}
 
 \vfill
-\noindent{\small\itshape All solver scripts referenced above live in the repo
-under \code{ALLWriteUps/scripts/} (or the linked path for the two that predate
-that folder). --- P.M.}
+\noindent{\small\itshape All solver scripts referenced above live in the
+\code{scripts/} folder at the repo root, one file per challenge. The two
+challenges without a script (The Leader, The Document That Remembers) were
+worked through by hand / by re-running the challenge's own code, as described.
+--- P.M.}
 
 \end{document}
