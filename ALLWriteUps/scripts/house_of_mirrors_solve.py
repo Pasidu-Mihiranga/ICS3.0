@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""
+House of Mirrors - solver.
+
+Peels the four-layer pipeline from the outside in:
+    RSA (e=3, m^3 < n)  ->  bytes_to_long  ->  ARC4  ->  XOR(LCG PRNG, seed=13)
+The RSA layer is broken with a plain integer cube root - no factoring needed.
+"""
+from hashlib import sha256
+from Crypto.Cipher import ARC4
+from Crypto.Util.number import long_to_bytes
+
+
+def cursed_prng(seed: int, length: int) -> bytes:
+    state = seed
+    out = bytearray()
+    for _ in range(length):
+        state = (1664525 * state + 1013904223) % (2**32)
+        out.append(state & 0xFF)
+    return bytes(out)
+
+
+def iroot3(n: int) -> int:
+    """Integer cube root via binary search."""
+    lo, hi = 0, n
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if mid**3 <= n:
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo
+
+
+# --- values from output.txt ---
+n = 27683487542422786215472018920501210126380963449407516183111081837697282929436872739433278299208935431002308094317428473669435763972782396932880406166711769091209375819301906164718288419156791955755840158376413800712843428355913731378494626001275678161621449459742282113984778140270096286663750785654702881521656366414310164241961459257436814038812607708213684720495732900548915542576050156202223789571115779309344789831863802186624192487932461368970398550599573584801024474975514147769502864042780527627692733181166161657015724345854632003907531577671008380899509024256967998855203631562677369323090291573444754468809
+e = 3
+c = 310520934533026900609096499451617236899180895063301894428842543947432387515405686157843538348036671380564669112815065930515821251499091643643560816904536677825253137073290655560497307876789961505332253073071175562286894561744034187800995909107727776912315940254720754803382086668138208363479019090548002601056095488486389851217094087832261509982135449967976643337360717007639818395528835612442941428213096067890188560820969984
+
+# Step 1: cube root
+m = iroot3(c)
+assert pow(m, 3) == c
+assert m**3 < n
+
+# Step 2: derive ARC4 key (hard-coded string right in the source)
+mirror_key = sha256(b"Unlucky13").digest()[:16]
+
+# Step 3: ARC4 decrypt (stream cipher - decrypt == encrypt)
+xor_layer = ARC4.new(mirror_key).decrypt(long_to_bytes(m))
+
+# Step 4: undo the XOR keystream
+flag = bytes(x ^ y for x, y in zip(xor_layer, cursed_prng(13, len(xor_layer))))
+
+print(flag.decode())

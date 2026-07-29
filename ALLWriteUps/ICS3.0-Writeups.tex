@@ -1,0 +1,653 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---------------------------------------------------------------------------
+%  ICS 3.0 CTF - collected write-ups
+% ---------------------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+
+% --- colours ---------------------------------------------------------------
+\definecolor{ink}{HTML}{1c1c22}
+\definecolor{accent}{HTML}{7b2d8e}
+\definecolor{accent2}{HTML}{2d6a8e}
+\definecolor{flagbg}{HTML}{f2ecf6}
+\definecolor{flagrule}{HTML}{7b2d8e}
+\definecolor{rule}{HTML}{d8d2de}
+\definecolor{codebg}{HTML}{f4f4f2}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=accent2,
+  urlcolor=accent2,
+  citecolor=accent2,
+  pdftitle={ICS 3.0 CTF - Write-ups},
+  pdfauthor={Pasidu Mihiranga}
+}
+
+% --- section styling -------------------------------------------------------
+\titleformat{\section}
+  {\color{accent}\Large\bfseries}{\thesection.}{0.6em}{}
+\titleformat{\subsection}
+  {\color{ink}\large\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{2.2ex plus 1ex minus .2ex}{1.2ex}
+
+% --- header / footer -------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancyhead[L]{\small\color{ink}\itshape ICS 3.0 --- Write-ups}
+\fancyhead[R]{\small\color{ink}\itshape Pasidu Mihiranga}
+\fancyfoot[C]{\thepage}
+
+% --- helper macros ---------------------------------------------------------
+% inline code that is safe with underscores / braces
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+
+% the flag box
+\newcommand{\flag}[1]{%
+  \par\medskip
+  \noindent
+  \colorbox{flagbg}{%
+    \parbox{\dimexpr\linewidth-2\fboxsep\relax}{%
+      \color{flagrule}\small\textbf{FLAG}\quad
+      \color{ink}\ttfamily\detokenize{#1}%
+    }%
+  }\par\medskip
+}
+
+% a "how I got the code" pointer line
+\newcommand{\solver}[2]{%
+  \par\smallskip
+  \noindent\textcolor{accent2}{$\rightarrow$}\; \textit{Solver script:} \href{#1}{\code{#2}}\par\smallskip
+}
+
+% category tag
+\newcommand{\cat}[1]{{\small\textcolor{accent}{\textbf{[#1]}}}}
+
+\newcommand{\repo}{https://github.com/Pasidu-Mihiranga/ICS3.0/blob/main/ALLWriteUps/scripts}
+
+% ===========================================================================
+\begin{document}
+
+% --- title page ------------------------------------------------------------
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+{\color{accent}\Huge\bfseries ICS 3.0 --- CTF Write-ups\par}
+\vspace{0.6cm}
+{\large\itshape How I actually solved them, one at a time\par}
+\vspace{2cm}
+\rule{0.5\linewidth}{0.6pt}\par
+\vspace{1cm}
+{\large Pasidu Mihiranga\par}
+\vspace{0.3cm}
+{\normalsize Seventeen challenges --- crypto, web, pwn, reversing, forensics, cloud\par}
+\vfill
+{\small A collected record of the boxes I broke during ICS 3.0, written the way
+I'd explain them to a teammate over coffee. Nothing here is theory --- every
+flag below actually came off the scoreboard.\par}
+\vspace{2cm}
+\end{titlepage}
+
+% --- intro -----------------------------------------------------------------
+\section*{Before we start}
+\addcontentsline{toc}{section}{Before we start}
+
+I kept notes as I went, and this is me cleaning them up into one place. I've
+tried to write down not just \emph{what} the answer was but the order my head
+actually moved in --- the dead ends I walked into, the moment something clicked,
+the little "oh, that's what the flavour text meant" beats. A few of these took
+me all evening; a couple fell over in ten minutes once I saw the trick.
+
+Where a challenge needed a real script to finish, I haven't pasted the code into
+this document --- it clutters the read and you can't run a PDF anyway. Instead
+there's a small arrow line under the solution pointing at the exact file in the
+repo. The scripts live under \code{ALLWriteUps/scripts/} unless noted otherwise.
+
+The event used two flag prefixes, \code{ICS{}} and \code{iCS{}} (lowercase
+\emph{i}), and yes --- that difference is load-bearing on at least one
+challenge. I've written each flag exactly as the scoreboard accepted it.
+
+\vspace{0.5cm}
+{\color{rule}\hrule}
+\vspace{0.3cm}
+
+\tableofcontents
+
+\newpage
+
+% ===========================================================================
+%  1. CRYPTO
+% ===========================================================================
+\section{House of Mirrors}
+\cat{crypto}
+
+Two files: \code{encrypt.py} and \code{output.txt}. The output just hands you
+\code{n}, \code{e = 3}, and a ciphertext \code{c}. Reading the encrypt script,
+the flag goes through four layers on the way out:
+\[
+\text{flag} \;\rightarrow\; \text{XOR (LCG keystream)} \;\rightarrow\; \text{ARC4} \;\rightarrow\; \text{bytes\_to\_long} \;\rightarrow\; \text{RSA } (e{=}3).
+\]
+
+The thing that jumped out immediately is \code{e = 3} with no padding. The flag
+is short, so the plaintext integer \code{m} is small enough that $m^3 < n$ ---
+which means RSA never actually wraps around the modulus. The ciphertext is
+literally $m^3$. No factoring, no fancy attack: just take an integer cube root
+and you've got \code{m} back. I used a binary-search cube root so I didn't have
+to trust floating point.
+
+From there it's all deterministic and the keys are sitting in the source. The
+ARC4 key is \code{sha256("Unlucky13")[:16]} --- the "Unlucky 13" theme is a
+hint, but honestly the string is right there in the file. ARC4 is symmetric so
+decrypting is the same op. The last peel is the XOR layer: a little LCG PRNG
+seeded with 13 (\code{state = (1664525*state + 1013904223) mod 2^32}, one byte
+each step). Regenerate the keystream, XOR again, done.
+
+\solver{\repo/house_of_mirrors_solve.py}{house_of_mirrors_solve.py}
+\flag{iCS{m1rr0r_m1rr0r_0n_th3_w4ll_3ncrypt10n_15_th3_k3y_t0_4ll}}
+
+% ---------------------------------------------------------------------------
+\section{BOS-400 Telegraph Archive}
+\cat{crypto / forensics}
+
+Two artefacts: a \code{challenge.txt} with a "BOS-400" byte stream, and
+\code{bos_code_card.png} holding an eight-glyph verification key. The card reads
+\code{M7KPX9ZL}, and the archive notes say a 1987 fragment \code{C0D3} came right
+after it --- so the full authentication material is \code{M7KPX9ZLC0D3}.
+
+The "256-bit member of the seal standardised in FIPS PUB 180-4" is a wordy way
+of saying SHA-256. Hash that string, keep the leftmost 16 bytes, and that's the
+fingerprint that gets repeated across the message.
+
+The ledger describes the \emph{forward} process: characters become codebook
+addresses, XOR with the repeated hash, then a high/low nibble swap on every
+byte. So to undo it I just run the inverse in reverse --- swap nibbles first
+(a nibble swap is its own inverse), XOR with the same fingerprint, and read the
+bytes back through the codebook. That gives
+\code{>S8lKWo;iCS{b0s400_d3c0mm1ss10n3d}}. The note says the terminal jams
+exactly eight characters of sync chatter in front of every payload, so I drop
+the first eight and I'm left with the real thing.
+
+\solver{\repo/bos_code_card_solve.py}{bos_code_card_solve.py}
+\flag{iCS{b0s400_d3c0mm1ss10n3d}}
+
+% ---------------------------------------------------------------------------
+\section{The Man on the Sealed Train}
+\cat{crypto / multi-stage}
+
+This one is a proper chain --- six stages, each stage coughing up the key for
+the next. The whole thing is Lenin's April 1917 journey from Z\"urich to
+Petrograd dressed up in deliberately archaic language, and every "key" is a real
+fact from that trip.
+
+\begin{enumerate}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{A1Z26} on \code{childhood_letter.txt}: the numbers
+    \code{18-5-22-15-12-21-20-9-15-14} spell \textbf{REVOLUTION}.
+  \item \textbf{Vigen\`ere} on \code{prisoner_note.txt} with that key gives
+    \code{SIBERIAN EXILE CREATED THEORY}. This one's just confirmation --- nothing
+    downstream eats its output, which is worth knowing so you don't waste time
+    looking for a use for it.
+  \item \textbf{Caesar} on \code{exile_diary.txt}. The shift isn't a Vigen\`ere
+    key --- the note says "the subject's \emph{measure} marks the distance of
+    exile", and the index term is \code{CAPITALISM}, whose \emph{length} is 10.
+    Shift back by 10 and the diary points at a six-letter German city on a lake
+    starting with Z: \textbf{Z\"urich} (spelled \code{ZURICH} --- accents are
+    lost at the border, per the footnote).
+  \item \textbf{ZipCrypto} on \code{newspaper_clipping.zip} with \code{ZURICH}.
+    Inside is an MD5 digest and a city list --- brute the eight cities, and
+    \code{md5("PETROGRAD")} matches.
+  \item \textbf{ZipCrypto} again on the manifest with \code{PETROGRAD}. This
+    gives the sealing instructions.
+  \item \textbf{SHA-256 counter-mode XOR}. The prose is a spec once you
+    translate it: seed = \code{PETROGRAD|SEALED TRAIN|} followed by the old-style
+    date as four raw bytes (New Style 16-04-1917 minus 13 Julian days =
+    03-04-1917 $\rightarrow$ bytes \code{03 04 13 11}). Keystream is
+    \code{sha256(seed || big-endian counter)} concatenated; XOR against the
+    ciphertext.
+\end{enumerate}
+
+The one genuine trap: the manifest has \emph{two} route strings. Only the one
+literally labelled "Route note" (\code{SEALED TRAIN}) decrypts to 285/285
+printable bytes; the other gives garbage. Score by printability and it decides
+itself. The decrypted speech ends in a hex archive mark that decodes to the
+flag --- and note the \textbf{lowercase i}. The first byte is \code{0x69}, not
+\code{0x49}. Submitting \code{ICS{...}} gets rejected; you have to send it
+exactly as it decoded.
+
+\solver{\repo/sealed_train_solve.py}{sealed_train_solve.py}
+\flag{iCS{P0W3R_W45_1N_7H3_5P33CH}}
+
+% ---------------------------------------------------------------------------
+\section{The Seduction}
+\cat{crypto / audio stego}
+
+A 42-second stereo WAV. First thing I did was look at the raw bytes, and the
+\code{LIST/INFO} metadata handed me an AES-256-CTR payload --- method, KDF
+(SHA-256), an IV, and the ciphertext. So the audio has to hide the passphrase.
+
+The clue points at frequency hopping (a nod to Hedy Lamarr). The normal stereo
+mix is a decoy; the real signal is the side channel, $L - R$, and subtracting the
+channels isolates a clean hopping burst between 12.0 s and 26.4 s. It changes
+frequency every 0.12 s, and the eight tones pair up into four binary FSK pairs
+--- within the active pair, lower tone is a 0 and upper is a 1. Reading 120 bits
+MSB-first gives a \code{55 aa} preamble followed by \code{VELVET STATIC}.
+
+The metadata told me to SHA-256 that phrase for the AES key. Decrypt the CTR
+stream and out comes the message plus the flag.
+
+I'll be honest --- I burned a good while down the wrong rabbit hole here first,
+trying to demodulate the FSK into base-3, Morse, tap code, everything, before I
+stepped back and realised the phrase itself was the key material. Lesson filed.
+
+\solver{\repo/the_seduction_solve.py}{the_seduction_solve.py}
+\flag{ICS{v3lv3t_st4t1c_h0ps_3142_7c9e}}
+
+% ---------------------------------------------------------------------------
+\section{Invitation to Tea Party}
+\cat{forensics / crypto}
+
+A Google Drive link to a 153 MB \code{tea_party.zip}. The size is a warning that
+you shouldn't just unpack blindly, so I read the ZIP central directory first. It
+holds 1755 JPEGs across 39 subdirectories (45 images each) plus one odd file,
+\code{drink_me.txt}. And the subdirectory names are exactly a flag alphabet:
+\code{0-9}, \code{A-Z}, and \code{_ { }}. Nobody names 39 folders like that by
+accident --- the tree is literally called \code{alice_tea_table_cipher}, so it's
+a substitution table where each folder is a plaintext character and the images
+inside are its symbols.
+
+\code{drink_me.txt} is 2624 hex characters. The bait: the JPEG filenames are
+16 hex chars each, which screams "slice the ciphertext into 16-char tokens and
+look up filenames" --- and that resolves exactly zero of them. The real move is
+to hash the image \emph{contents}. Sweeping algorithms and both ends of each
+digest, SHA-256 hits on both the first \emph{and} last 16 chars of the same
+files, which only happens if the whole 64-char digest is in the blob. So the
+record size is 64, not 16: $2624 / 64 = 41$ characters.
+
+From there it's one lookup per record: \code{sha256(image bytes)} maps to the
+folder name. The output opens with the \code{ICS} prefix and closes with a
+brace, which is its own proof it's right. (Fun detail: one digest appears twice because the
+letter T repeats and the encoder happened to reuse the same image.)
+
+\solver{\repo/tea_party_solve.py}{tea_party_solve.py}
+\flag{ICS{W3LC0ME_T0_TH3_M4D_H4TT3RS_T34_P4RTY}}
+
+% ===========================================================================
+%  WEB
+% ===========================================================================
+\section{Chameleo Great Power}
+\cat{web}
+
+Start page is \code{/culture} for "Chameleo International", and the brief says
+find the secret "where the power is at its peak". The nav shows \code{/team} and
+\code{/login}, but digging through the client bundle leaks a pile of hidden
+routes --- including \code{/ceo/dashboard} and \code{/ceo/employees/search}. The
+"power at its peak" line is basically telling you to aim at the CEO routes.
+
+The chain went like this. \code{/team/manduka-rapatulo} gives me a profile and,
+crucially, the portal ID format (\code{firstname.lastname}) $\rightarrow$
+username \code{manduka.rapatulo}. The \code{/recover} page asks "what is your
+pet's name?", and a bit of guessing at common pet names lands on \code{Milo},
+which drops me a valid session cookie as Manduka.
+
+Manduka's dashboard shows a \emph{disabled} "System Users" card --- but the
+restriction is only in the UI. Hitting \code{/users} directly with the session
+works and leaks password hashes. The CEO \code{rango.jayamaha} has hash
+\code{5f4dcc3b5aa765d61d8327deb882cf99}, which is the world's most famous MD5:
+\code{password}. Log in as CEO.
+
+The CEO's \code{/ceo/employees} page has an HTML comment admitting the directory
+still accepts "selectors from the retired archive service". The search endpoint's
+\code{fields} parameter is injectable --- \code{fields=sqlite_version()} returns
+\code{3.51.3}, confirming SQL selector injection. Query \code{sqlite_master},
+find a hidden \code{confidential_notes} table, read it, and the note is the flag.
+
+\flag{iCS{s3l3c7_qu3r13s_n33d_b0und4r13s}}
+
+% ---------------------------------------------------------------------------
+\section{Kotoamatsukami}
+\cat{web / logic}
+
+Two endpoints. \code{/api/seal} checks that your JSON directive is benign
+(\code{action=request_access}, \code{subject=guest}, \code{level=public}) and, if
+so, signs it with HMAC-SHA256. \code{/api/execute} verifies the signature and
+then \emph{acts} on the payload.
+
+The bug is a classic parser-discrepancy on duplicate keys: the signing gateway
+keeps the \textbf{first} occurrence of a repeated key, the execution engine keeps
+the \textbf{last}. So I hand it a payload with both:
+
+\begin{quote}
+\code{action:request_access}, \code{action:grant_access},
+\code{subject:guest}, \code{level:public}, \code{level:level-5}
+\end{quote}
+
+The gateway reads it as request\_access / public --- all allowed --- and happily
+signs it. The execute endpoint reads the \emph{same bytes} as grant\_access /
+level-5, and since the signature is genuinely valid it carries out the elevated
+action and hands back a \code{decision_session} cookie. Use that cookie on
+\code{/api/archive} and the restricted archive opens up.
+
+\flag{ICS{7h3_d3c1510n_w45_n3v3r_y0ur5}}
+
+% ---------------------------------------------------------------------------
+\section{Vanishing Stars}
+\cat{cloud}
+
+SkyTrace Aerospace says its satellite SVT-7 was lost after launch. An engineer
+disagrees. The site is a mission dashboard; the \code{/telemetry} page already
+smells wrong --- the last "public" packet is NOMINAL, then nine minutes later
+the status flips to FAILED and \emph{then} the stream "terminates". The
+termination follows the status change, not a real signal loss.
+
+\code{robots.txt} disallows \code{/storage/skytrace-public/deployment-backup.zip}
+--- which of course is the first place I looked. That ZIP is the whole Terraform
+config and source. Two gifts inside: a leaked function key
+(\code{skytrace-public-processor-v1}) in \code{old.env.example}, and a path
+traversal in \code{telemetry_processor.py} --- it checks
+\code{startswith("public/")} \emph{before} normalising the path, so
+\code{public/../anything} sails through. Classic check-before-normalise TOCTOU.
+
+With the function key and the traversal I can read the private telemetry bucket.
+Then the IAM layer over-shares: \code{telemetry-processor-role} can assume
+\code{archive-auditor} with no restriction, so I mint an STS token for it, list
+\code{skytrace-mission-archive}, and read the production logs. The logs are the
+smoking gun --- packets \emph{kept arriving} across orbits 2 and 3 after the
+"failure", and an executive override at 18:20 UTC flipped the status manually.
+\code{executive-decision.txt} spells it out: the satellite is fine, keep
+publishing the failure story, the insurance claim needs it to look
+unrecoverable. \$47M of fraud, and the flag is in that memo.
+
+\flag{ICS{7H3_5473LL173_N3V3R_F41L3D}}
+
+% ===========================================================================
+%  PWN / REVERSING
+% ===========================================================================
+\section{Man Behind the Mask}
+\cat{pwn}
+
+One stripped x86-64 PIE binary, \code{redemption_core}. Canary, NX, PIE all on
+--- so no shellcode-on-stack, this is a leak-then-ROP job. Strings tease
+\code{lord_ruin_script.txt} (the file I want to read) and a stray blob
+\code{NIURKSAMH9}.
+
+Reading the disassembly, \code{main} calls three functions:
+
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \code{interview()} does \code{printf(buf)} on my input with no format
+    string of its own --- a textbook format-string bug, and it runs \emph{first}.
+  \item \code{validate_identity()} reads 0x100 bytes into an 0x50-byte struct ---
+    a clean stack overflow. It also checks a role field equals \code{RUIN} and a
+    key field equals the 64-bit immediate that decodes to \code{NIURKSAM}.
+  \item A third, never-called function that opens the script file but only ever
+    \code{write()}s one byte --- a decoy. I ignore it and build my own chain.
+\end{itemize}
+
+So: use the format string to leak the stack canary (index 23, ends in
+\code{00}) and a PIE-mapped return address (index 25, minus \code{0x15cf} gives
+the page-aligned base). Then in \code{validate_identity} I lay down the filler,
+put \code{RUIN} and \code{NIURKSAM} in their fields, replant the exact leaked
+canary so \code{__stack_chk_fail} doesn't fire, and from the return address
+onward I ROP: \code{open("lord_ruin_script.txt")} $\rightarrow$
+\code{read(3, bss, 0x100)} $\rightarrow$ \code{write(1, bss, 0x100)}. That dumps
+the script and the flag with it.
+
+\solver{https://github.com/Pasidu-Mihiranga/ICS3.0/blob/main/Man_Behind_the_Mask_exploit.py}{Man_Behind_the_Mask_exploit.py}
+\flag{iCS{N3W_M45K_54M3_M3M0RY}}
+
+% ---------------------------------------------------------------------------
+\section{The Leader}
+\cat{reversing}
+
+A remote \code{nc} service plus a stripped, statically linked ELF. It asks for
+four "archive fields" (ALPHA--DELTA) and has a \code{TracerPid} anti-debug
+check, so I did this mostly static.
+
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{ALPHA}: reads an int, formats it back to decimal, DJB2-hashes the
+    string (\code{h = h*33 + byte}, seed \code{0x1505}) and compares to
+    \code{0x7c78cdd3}. Inverting over decimal strings gives \code{1337}.
+  \item \textbf{BRAVO}: a 10-char string, compared case-insensitively byte by
+    byte $\rightarrow$ \code{c0rrupt10n}.
+  \item \textbf{CHARLIE}: a tiny stack VM in \code{.rodata} computing
+    \code{((x XOR 0x0f01) + 0x1a) == 0x172b} $\rightarrow$ \code{1984}.
+  \item \textbf{DELTA}: a 16-bit byte-mixing transform that must equal
+    \code{0xbbb7}; brute all 16-bit inputs and only \code{1776} works. (It also
+    re-checks \code{/proc/self/status} for a tracer.)
+\end{itemize}
+
+Feed \code{1337 / c0rrupt10n / 1984 / 1776} and the terminal assembles the key
+and prints the flag. The four values are the story --- 1984, corruption, 1776,
+1337 --- and they double as the decryption key the binary uses internally.
+
+\flag{ICS{1984_c0rrupt10n_1776_1337}}
+
+% ---------------------------------------------------------------------------
+\section{The Art of Programming}
+\cat{reversing / esolang}
+
+The "abstract painting" they give you isn't abstract at all --- the border uses
+all 20 colours of the \textbf{Piet} esoteric language, which is designed to look
+like a Mondrian. Each codel is a $10\times10$ block, so the $600\times600$ image
+is really a $60\times60$ Piet program.
+
+Running it with the normal initial state (DP right, CC left, empty stack) prints
+\code{ICS{This_is_Not_the_flag}} --- which is obviously a decoy telling you so to
+your face. The border actually weaves \emph{two} execution lanes together.
+Selecting the other lane (codel chooser to the right) and seeding the stack with
+ASCII \code{_a} (\code{95, 97}) runs the hidden lane and prints the real one.
+
+\flag{ICS{This_is_Mondarian_art}}
+
+% ===========================================================================
+%  FORENSICS / STEGO / DEVOPS
+% ===========================================================================
+\section{Fairchild}
+\cat{stego / OSINT}
+
+\code{fairchild.zip} gives you \code{stratofortress.pdf} --- except the magic
+bytes are \code{89 50 4E 47}, so it's a PNG, not a PDF. The extension is the
+first lie. The image is a seven-line poem, and each poem line is a \emph{slot}
+in a hidden string; each slot's character is stashed in a different corner of the
+file, and every payload carries its own poem line as a join key so the rendered
+image \emph{is} the ordering.
+
+I walked the PNG chunk table by hand, because everything valuable lives exactly
+where a compliant decoder stops looking: an \code{eXIf} comment, a \code{zTXt}
+chunk, 560 bytes past \code{IEND}, an appended ZIP, LSB stego, and a completely
+made-up \code{quTx} private chunk. Each fragment has the form
+\code{*<char>*}, its own MD5, and the poem line. Assembled in poem order they
+spell \textbf{FH-227D} --- the Fairchild Hiller FH-227D, the aircraft of
+Uruguayan Air Force Flight 571, the 1972 Andes crash.
+
+But \code{ICS{FH-227D}} gets rejected. The second hint --- "a transformation,
+not a translation" --- is the standard idiom for "hash it, don't decode it", and
+the whole file uses MD5 as its verification primitive (slot 1 even carries
+\code{md5("")}, an empty hash waiting for input). So the answer is
+\code{md5("FH-227D")}.
+
+\solver{\repo/fairchild_solve.py}{fairchild_solve.py}
+\flag{ICS{d2f8c2624be366cdfe3cee06dd216cc3}}
+
+% ---------------------------------------------------------------------------
+\section{The Contaminated Container}
+\cat{devops / container forensics}
+
+They ship a \code{docker save} export, \code{deleted-container-image.tar}. The
+brief basically tells you the trick: recovery material was copied in during the
+build and "deleted" before publication. In Docker, deleting a file in a later
+layer just creates a \code{.wh.} whiteout in the overlay --- the original bytes
+are still sitting in the earlier layer.
+
+So I extracted every \code{layer.tar} separately. \code{find . -name ".wh.*"}
+points at \code{.wh.fragment-a.txt}; the actual \code{fragment-a.txt} is alive in
+an earlier layer and reads \code{1m4g3_l4y3r5_} (Fragment A). Fragment B comes
+from the image config JSON's history: an \code{ENV RECOVERY_FRAGMENT_B=r3m3mb3r}
+that was later cleared to empty --- but the history remembers every command, so
+\code{r3m3mb3r} is right there.
+
+The \code{/app} layer has \code{license.dat} and a \code{maintenance-loader.pyc}.
+Disassembling the bytecode (Python's own \code{dis}+\code{marshal}, since 3.11+
+fights the usual decompilers), the format is a \code{DCLIC-V1} header, a 16-byte
+CTR nonce, then AES-CTR ciphertext keyed by
+\code{sha256(fragmentA + fragmentB)} = \code{sha256("1m4g3_l4y3r5_r3m3mb3r")}.
+Replicate that and \code{license.dat} decrypts to a JSON blob with the flag.
+
+\solver{https://github.com/Pasidu-Mihiranga/ICS3.0/blob/main/The\%20Contaminated\%20Container/decrypt.py}{decrypt.py}
+\flag{ICS{d3l3t3d_fr0m_v13w_n0t_fr0m_h15t0ry}}
+
+% ---------------------------------------------------------------------------
+\section{The Seventh Encore}
+\cat{supply chain / build forensics}
+
+Great flavour: a dead singer's hologram was approved for six acts, but
+production rendered seven from the same source commit. If the source didn't
+change, whatever got in came from dependency resolution --- so I stopped reading
+source and started diffing the two build environments.
+
+The Windows rehearsal produced six acts; the Linux production runner produced
+seven. Side by side, the Linux install pulled
+\code{@orpheus/stage-linux-x64@4.2.3} while Windows got \code{4.2.2}, and only
+that one package ran a lifecycle script. The registry audit log explains it: the
+package was published four seconds mid-build using the never-revoked legacy CI
+token of a maintainer who \emph{died in 2023}
+(\code{legacyTokenRevoked: null}, \code{status: deceased}). Because the pipeline
+ran \code{npm install --package-lock=false}, the caret range \code{^4.2.0}
+floated straight onto the poisoned version. Windows never saw it because npm
+skipped the Linux binary as OS-incompatible --- the attack was only reachable on
+the platform that actually shipped.
+
+The payload is in \code{calibration.dat}: a 15-byte magic, a 16-byte IV, then
+AES-256-CTR. The key is \code{sha256(trustedIntegrity)}, and the integrity hash
+of the legitimate 4.2.2 release is sitting in the provenance attestation the
+whole time --- the artefact written to prove the malware wasn't there is the key
+that unlocks it. Decrypt with that and act seven's message is the flag.
+
+\flag{ICS{th3_53v3nth_3nc0r3_w45_n3v3r_h3r5}}
+
+% ---------------------------------------------------------------------------
+\section{The Candidate Who Never Whispered}
+\cat{stego / crypto}
+
+Four files: a poster, a transcript, interview notes, and
+\code{private_broadcast.enc}. The trick is spread across the archive as
+instructions. The poster's illuminated paragraph is an acrostic --- first letter
+of each of nine lines spells \textbf{FIBONACCI}. The interview says "just natural
+growth" (Fibonacci again) and "a woven boundary, like a ZigZag, exactly three
+times high" (Rail Fence, 3 rails). The transcript's episode ID
+\code{BRAASI-EL-634}, split by odd/even positions, spells \code{BASE64} and
+\code{RAIL3} --- confirming the mechanism.
+
+So: pull the characters at Fibonacci-numbered (1-based) positions out of the
+broadcast --- that gives \code{F{305WLG47N1N1_03}A77_PR}, clearly a flag but
+transposed --- then run it through a 3-rail Rail Fence decrypt to get
+\code{FLAG{4773N710N_15_P0W3R}}. Swap the generic \code{FLAG} prefix for the
+event's \code{iCS} and that's it. (Body reads "ATTENTION IS POWER" in leet.)
+
+\solver{\repo/candidate_never_whispered_solve.py}{candidate_never_whispered_solve.py}
+\flag{iCS{4773N710N_15_P0W3R}}
+
+% ---------------------------------------------------------------------------
+\section{The Impossible Meeting}
+\cat{forensics / timezone logic}
+
+A single \code{.ics} calendar. It defines three \code{VTIMEZONE} blocks with
+full DST rules, which is the puzzle shouting that timezone math is the whole
+game. The master event is \code{FREQ=DAILY;COUNT=8} with one \code{EXDATE},
+leaving seven occurrences, and each survivor has an override that \emph{relocates}
+it to a different timezone.
+
+Two traps. First, each override has both a \code{RECURRENCE-ID} (which only
+\emph{identifies} the original slot, always a flat 09:00) and a \code{DTSTART}
+(when it \emph{actually} runs, with deliberate odd seconds) --- you want the
+DTSTART. Second, DST: two Berlin events five days apart have different UTC
+offsets (CET +01:00 vs CEST +02:00 across the March 29 transition), and if you
+apply the same offset to both, one byte comes out as an unprintable control
+character and the key is silently wrong.
+
+The description is the instruction sheet: sort the seven by UTC instant, take
+\code{epoch}~mod~256 from each --- one byte per meeting. Done right, all seven land
+in printable ASCII and spell \code{q7M2vK9}, which is the checksum that you got
+it right. The attachment is a \code{IMTG1\x00} header, then repeating-XOR over a
+raw DEFLATE stream. XOR with the key and inflate --- and note you need the
+streaming decompressor, because the stream has no final-block terminator and the
+one-shot \code{zlib.decompress} throws even with the correct key. That last bit
+genuinely cost me time.
+
+\solver{\repo/impossible_meeting_solve.py}{impossible_meeting_solve.py}
+\flag{ICS{utc_t1m3_b34t5_w4ll_cl0ck5}}
+
+% ---------------------------------------------------------------------------
+\section{The Document That Remembers}
+\cat{forensics / CRDT}
+
+A recovered collaborative editor that only shows the final clean copy, but legal
+needs the exact document state bound to receipt \code{hold-7f1c}. The audit log
+gives that receipt a causal frontier
+(\code{a17f:369, b03c:331, c92e:289}) and a SHA-256; the final snapshot uses a
+\emph{later} frontier, so the published text isn't the target --- I have to
+replay the operation journal up to the hold's frontier.
+
+\code{editor/app.js} is the renderer. \code{operations.bin} starts with a
+\code{SLATELOG2} signature and the rest is zlib-deflated JSON: insert/delete ops
+authored by three actors, with inserted characters XOR-decoded against a
+per-actor mask and a causal clock, deletes tombstoning nodes, and rendering
+walking the op tree from \code{root:0}. I reused the editor's own algorithm but
+stopped applying operations at the receipt frontier instead of the final one.
+The recovered text's SHA-256 matched the receipt exactly, and it carried the
+authorization token.
+
+\flag{ICS{t0mb5t0n35_r3m3mb3r_42b7}}
+
+% ===========================================================================
+%  wrap up
+% ===========================================================================
+\newpage
+\section*{Scoreboard}
+\addcontentsline{toc}{section}{Scoreboard}
+
+For quick reference, here's everything in one place.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\small
+\begin{tabular}{@{}p{4.9cm}p{2.6cm}p{7.3cm}@{}}
+\textbf{Challenge} & \textbf{Category} & \textbf{Flag} \\[2pt]
+\hline
+House of Mirrors & crypto & \code{iCS{m1rr0r_m1rr0r_..._t0_4ll}} \\
+BOS-400 Telegraph & crypto & \code{iCS{b0s400_d3c0mm1ss10n3d}} \\
+Sealed Train & crypto & \code{iCS{P0W3R_W45_1N_7H3_5P33CH}} \\
+The Seduction & audio stego & \code{ICS{v3lv3t_st4t1c_h0ps_3142_7c9e}} \\
+Tea Party & forensics & \code{ICS{W3LC0ME_..._T34_P4RTY}} \\
+Chameleo Great Power & web & \code{iCS{s3l3c7_qu3r13s_n33d_b0und4r13s}} \\
+Kotoamatsukami & web & \code{ICS{7h3_d3c1510n_w45_n3v3r_y0ur5}} \\
+Vanishing Stars & cloud & \code{ICS{7H3_5473LL173_N3V3R_F41L3D}} \\
+Man Behind the Mask & pwn & \code{iCS{N3W_M45K_54M3_M3M0RY}} \\
+The Leader & reversing & \code{ICS{1984_c0rrupt10n_1776_1337}} \\
+The Art of Programming & esolang & \code{ICS{This_is_Mondarian_art}} \\
+Fairchild & stego & \code{ICS{d2f8c2624be366cdfe3cee06dd216cc3}} \\
+Contaminated Container & devops & \code{ICS{d3l3t3d_fr0m_v13w_n0t_fr0m_h15t0ry}} \\
+The Seventh Encore & supply chain & \code{ICS{th3_53v3nth_3nc0r3_w45_n3v3r_h3r5}} \\
+Candidate Who Never Whispered & stego & \code{iCS{4773N710N_15_P0W3R}} \\
+The Impossible Meeting & forensics & \code{ICS{utc_t1m3_b34t5_w4ll_cl0ck5}} \\
+The Document That Remembers & forensics & \code{ICS{t0mb5t0n35_r3m3mb3r_42b7}} \\
+\end{tabular}
+\end{center}
+
+\vfill
+\noindent{\small\itshape All solver scripts referenced above live in the repo
+under \code{ALLWriteUps/scripts/} (or the linked path for the two that predate
+that folder). --- P.M.}
+
+\end{document}
